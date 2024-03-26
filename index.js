@@ -22,6 +22,19 @@ const convert = (number, decimal) => {
     return Math.round(number * num)
 }
 
+const feeAccountFn = async (referralAccountPubkey, mint) => {
+    const [feeAccount] = PublicKey.findProgramAddressSync(
+        [
+            Buffer.from('referral_ata'),
+            referralAccountPubkey.toBuffer(), // your referral account public key
+            mint.toBuffer() // the token mint, output mint for ExactIn, input mint for ExactOut.
+        ],
+        new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3') // the Referral Program
+    )
+
+    return feeAccount
+}
+
 const jup = async () => {
     // It is recommended that you use your own RPC endpoint.
     // This RPC endpoint is only for demonstration purposes so that this example will run.
@@ -34,7 +47,7 @@ const jup = async () => {
 
     const secret = JSON.parse(
         fs.readFileSync(
-            `./wallets/4TFRoqGkLRJs2ApEyeLKPwpdzLZrSu11rvFPBLHYDbQa.json`
+            `./wallets/3XnQcdXokQZvsbV1iXqVAntp7DFQmpu2YCDZrLZ74gpH.json`
         )
     )
 
@@ -43,15 +56,26 @@ const jup = async () => {
     const keypair = wallet.payer
 
     //input values
-    const amt = 0.00520873
+    //sol So11111111111111111111111111111111111111112
+    const priorityFee = 55000
+
+    const amt = 0.97833
 
     const slippage = 2000
 
     const input = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 
-    const output = 'FknBpVE3anNhJo8jN5ddZNgwtdmwoPAJ72nfzzcofxzi'
+    const output = 'So11111111111111111111111111111111111111112'
 
     const inputpk = new PublicKey(input)
+
+    const mint = new PublicKey(output)
+
+    const referralAccountPubkey = new PublicKey(
+        'CEr5bqeMPz5eswoLKXiyiJ56juMcng6w2HSGiwe5r5ah'
+    )
+
+    const feeAccount = await feeAccountFn(referralAccountPubkey, mint)
 
     // const tokenInfo = await getAssociatedTokenAddress(
     //     capk,
@@ -64,19 +88,19 @@ const jup = async () => {
     const mintInfo = await getMint(connection, inputpk)
     const decimal = mintInfo.decimals
 
-    console.log(mintInfo)
+    // console.log(mintInfo)
 
     const tokenAmt = convert(amt, decimal)
 
     // Swapping SOL to USDC with input 0.1 SOL and 0.5% slippage
     const quoteResponse = await (
         await fetch(
-            `https://quote-api.jup.ag/v6/quote?inputMint=${input}&outputMint=${output}&amount=${tokenAmt}&slippageBps=${slippage}`
+            `https://quote-api.jup.ag/v6/quote?inputMint=${input}&outputMint=${output}&amount=${tokenAmt}&slippageBps=${slippage}&platformFeeBps=200`
         )
     ).json()
     // console.log({ quoteResponse })
 
-    console.log(quoteResponse)
+    //console.log(quoteResponse)
 
     const { swapTransaction } = await (
         await fetch('https://quote-api.jup.ag/v6/swap', {
@@ -91,10 +115,11 @@ const jup = async () => {
                 userPublicKey: keypair.publicKey.toString(),
                 // auto wrap and unwrap SOL. default is true
                 wrapAndUnwrapSol: true,
+                feeAccount,
                 // feeAccount is optional. Use if you want to charge a fee.  feeBps must have been passed in /quote API.
                 // feeAccount: "fee_account_public_key"
                 dynamicComputeUnitLimit: true,
-                prioritizationFeeLamports: 55000
+                prioritizationFeeLamports: priorityFee
             })
         })
     ).json()
